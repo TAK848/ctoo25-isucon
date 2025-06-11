@@ -85,6 +85,8 @@ func dbInitialize() {
 		"DELETE FROM comments WHERE id > 100000",
 		"UPDATE users SET del_flg = 0",
 		"UPDATE users SET del_flg = 1 WHERE id % 50 = 0",
+		// EXPLAIN SELECT * FROM `comments` WHERE `post_id` = 1 ORDER BY `created_at` DESC LIMIT 100; 狙いのindex追加
+		"CREATE INDEX IF NOT EXISTS `idx_post_id_created_at` ON `comments` (`post_id`, `created_at` DESC)",
 	}
 
 	for _, sql := range sqls {
