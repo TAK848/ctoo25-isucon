@@ -24,6 +24,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
+	"github.com/samber/lo"
 )
 
 var (
@@ -176,6 +177,13 @@ func getFlash(w http.ResponseWriter, r *http.Request, key string) string {
 }
 
 func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, error) {
+	results = lo.Filter(results, func(p Post, _ int) bool {
+		return p.User.DelFlg == 0
+	})
+	if len(results) > postsPerPage {
+		results = results[:postsPerPage]
+	}
+
 	var posts []Post
 
 	for _, p := range results {
@@ -866,7 +874,8 @@ func main() {
 	}
 
 	dsn := fmt.Sprintf(
-		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=Local",
+		// admin prepare
+		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=Local&maxOpenConns=1000&maxIdleConns=1000&interpolateParams=true",
 		user,
 		password,
 		host,
