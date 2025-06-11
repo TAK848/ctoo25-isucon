@@ -43,7 +43,7 @@ func extractImagesToFiles() error {
 	}
 
 	// 全画像を取得
-	rows, err := db.Query("SELECT id, mime, imgdata FROM posts WHERE imgdata IS NOT NULL")
+	rows, err := db.Query("SELECT id, mime, imgdata FROM posts WHERE imgdata IS NOT NULL AND id <=10000")
 	if err != nil {
 		return fmt.Errorf("failed to query images: %w", err)
 	}
