@@ -4,6 +4,7 @@ import (
 	crand "crypto/rand"
 	"crypto/sha512"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io"
@@ -21,7 +22,6 @@ import (
 
 	"github.com/bradfitz/gomemcache/memcache"
 	gsm "github.com/bradleypeabody/gorilla-sessions-memcache"
-	"github.com/catatsuy/cache"
 	"github.com/catatsuy/private-isu/webapp/golang/chiinteg"
 	"github.com/go-chi/chi/v5"
 	_ "github.com/go-sql-driver/mysql"
@@ -32,9 +32,9 @@ import (
 )
 
 var (
-	db        *sqlx.DB
-	store     *gsm.MemcacheStore
-	userCache *cache.ReadHeavyCache[int, User]
+	db             *sqlx.DB
+	store          *gsm.MemcacheStore
+	memcacheClient *memcache.Client
 )
 
 const (
@@ -80,12 +80,9 @@ func init() {
 	if memdAddr == "" {
 		memdAddr = "localhost:11211"
 	}
-	memcacheClient := memcache.New(memdAddr)
+	memcacheClient = memcache.New(memdAddr)
 	store = gsm.NewMemcacheStore(memcacheClient, "iscogram_", []byte("sendagaya"))
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-
-	// Initialize user cache
-	userCache = cache.NewReadHeavyCache[int, User]()
 }
 
 // 画像をオンデマンドで保存
@@ -122,7 +119,7 @@ func saveImageToFile(id int, mime string, imgdata []byte) error {
 
 func tryLogin(accountName, password string) *User {
 	u := User{}
-	err := db.Get(&u, "SELECT * FROM users WHERE account_name = ? AND del_flg = 0", accountName)
+	err := db.Get(&u, "SELECT `account_name`, `passhash` FROM users WHERE account_name = ? AND del_flg = 0", accountName)
 	if err != nil {
 		return nil
 	}
@@ -167,21 +164,32 @@ func getSessionUser(r *http.Request) User {
 	}
 
 	userID := uid.(int)
+	cacheKey := fmt.Sprintf("user:%d", userID)
 
-	// Check cache first
-	if cachedUser, ok := userCache.Get(userID); ok {
-		return cachedUser
+	// Check memcached first
+	item, err := memcacheClient.Get(cacheKey)
+	if err == nil {
+		var u User
+		if err := json.Unmarshal(item.Value, &u); err == nil {
+			return u
+		}
 	}
 
 	// Not in cache, fetch from DB
 	u := User{}
-	err := db.Get(&u, "SELECT * FROM `users` WHERE `id` = ?", userID)
+	err = db.Get(&u, "SELECT * FROM `users` WHERE `id` = ?", userID)
 	if err != nil {
 		return User{}
 	}
 
-	// Cache the user
-	userCache.Set(userID, u)
+	// Cache the user in memcached (1 hour expiration)
+	if data, err := json.Marshal(u); err == nil {
+		memcacheClient.Set(&memcache.Item{
+			Key:        cacheKey,
+			Value:      data,
+			Expiration: 3600, // 1 hour
+		})
+	}
 
 	return u
 }
@@ -351,8 +359,8 @@ func getTemplPath(filename string) string {
 func getInitialize(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 
-	// Clear user cache
-	userCache.Clear()
+	// Clear all memcached data
+	memcacheClient.FlushAll()
 
 	dbInitialize()
 
@@ -409,8 +417,15 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		session.Values["csrf_token"] = secureRandomStr(16)
 		session.Save(r, w)
 
-		// Cache the user
-		userCache.Set(u.ID, *u)
+		// Cache the user in memcached
+		cacheKey := fmt.Sprintf("user:%d", u.ID)
+		if data, err := json.Marshal(*u); err == nil {
+			memcacheClient.Set(&memcache.Item{
+				Key:        cacheKey,
+				Value:      data,
+				Expiration: 3600, // 1 hour
+			})
+		}
 
 		http.Redirect(w, r, "/", http.StatusFound)
 	} else {
@@ -489,7 +504,14 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 	// Get and cache the newly created user
 	newUser := User{}
 	if err := db.Get(&newUser, "SELECT * FROM `users` WHERE `id` = ?", uid); err == nil {
-		userCache.Set(int(uid), newUser)
+		cacheKey := fmt.Sprintf("user:%d", uid)
+		if data, err := json.Marshal(newUser); err == nil {
+			memcacheClient.Set(&memcache.Item{
+				Key:        cacheKey,
+				Value:      data,
+				Expiration: 3600, // 1 hour
+			})
+		}
 	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
@@ -1031,7 +1053,8 @@ func postAdminBanned(w http.ResponseWriter, r *http.Request) {
 
 			// Clear cache for banned users
 			for _, uid := range userIDs {
-				userCache.Delete(uid)
+				cacheKey := fmt.Sprintf("user:%d", uid)
+				memcacheClient.Delete(cacheKey)
 			}
 		}
 	}
