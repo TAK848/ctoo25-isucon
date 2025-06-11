@@ -163,7 +163,16 @@ func getSessionUser(r *http.Request) User {
 		return User{}
 	}
 
-	userID := uid.(int)
+	// Handle both int and int64
+	var userID int
+	switch v := uid.(type) {
+	case int:
+		userID = v
+	case int64:
+		userID = int(v)
+	default:
+		return User{}
+	}
 	cacheKey := fmt.Sprintf("user:%d", userID)
 
 	// Check memcached first
@@ -497,7 +506,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session.Values["user_id"] = uid
+	session.Values["user_id"] = int(uid)  // Convert to int for consistency
 	session.Values["csrf_token"] = secureRandomStr(16)
 	session.Save(r, w)
 
