@@ -19,6 +19,8 @@ docker-compose up -d
 
 # IMPORTANT: Switch to Go implementation in docker-compose.yml
 # Change line 18: context: ruby/ → context: golang/
+
+# NOTE: Docker設定（docker-compose.yml等）は本番環境と異なるため触らないでください
 ```
 
 ### Database Operations
@@ -113,3 +115,6 @@ ISUCONP_MEMCACHED_ADDRESS (default: localhost:11211)
 - Fixed N+1 query in makePosts using batch comment counting (commits: 759ee4b)
 - Added index on posts.created_at (commit: 4db0ba2)
 - Database connection uses interpolateParams=true for better performance
+
+## Important Notes
+- **ファイルの最終行には必ず改行を入れてください** - POSIX標準に準拠し、gitでの差分表示を見やすくするため

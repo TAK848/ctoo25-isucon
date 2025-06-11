@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -37,6 +38,7 @@ const (
 	postsPerPage  = 20
 	ISO8601Format = "2006-01-02T15:04:05-07:00"
 	UploadLimit   = 10 * 1024 * 1024 // 10mb
+	ImageDir      = "/var/www/images"   // nginx配信用の画像ディレクトリ
 )
 
 type User struct {
@@ -95,6 +97,71 @@ func dbInitialize() {
 	for _, sql := range sqls {
 		db.Exec(sql)
 	}
+	
+	// 既存の画像をファイルシステムに書き出す
+	if err := extractImagesToFiles(); err != nil {
+		log.Printf("Failed to extract images: %v", err)
+	}
+}
+
+// 画像をファイルシステムに書き出す
+func extractImagesToFiles() error {
+	// 画像ディレクトリを作成
+	if err := os.MkdirAll(ImageDir, 0755); err != nil {
+		return fmt.Errorf("failed to create image directory: %w", err)
+	}
+
+	// 全画像を取得
+	rows, err := db.Query("SELECT id, mime, imgdata FROM posts WHERE imgdata IS NOT NULL")
+	if err != nil {
+		return fmt.Errorf("failed to query images: %w", err)
+	}
+	defer rows.Close()
+
+	var count int
+	for rows.Next() {
+		var id int
+		var mime string
+		var imgdata []byte
+		
+		if err := rows.Scan(&id, &mime, &imgdata); err != nil {
+			log.Printf("Failed to scan image row: %v", err)
+			continue
+		}
+		
+		// 拡張子を決定
+		ext := ""
+		switch mime {
+		case "image/jpeg":
+			ext = ".jpg"
+		case "image/png":
+			ext = ".png"
+		case "image/gif":
+			ext = ".gif"
+		default:
+			log.Printf("Unknown mime type for post %d: %s", id, mime)
+			continue
+		}
+		
+		// ファイルパスを生成
+		filename := fmt.Sprintf("%d%s", id, ext)
+		filepath := filepath.Join(ImageDir, filename)
+		
+		// ファイルに書き込み
+		if err := os.WriteFile(filepath, imgdata, 0644); err != nil {
+			log.Printf("Failed to write image file %s: %v", filepath, err)
+			continue
+		}
+		
+		count++
+	}
+	
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("error iterating images: %w", err)
+	}
+	
+	log.Printf("Extracted %d images to %s", count, ImageDir)
+	return nil
 }
 
 func tryLogin(accountName, password string) *User {
@@ -776,6 +843,26 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Print(err)
 		return
+	}
+
+	// 画像をファイルシステムに保存
+	ext := ""
+	switch mime {
+	case "image/jpeg":
+		ext = ".jpg"
+	case "image/png":
+		ext = ".png"
+	case "image/gif":
+		ext = ".gif"
+	}
+	
+	if ext != "" {
+		filename := fmt.Sprintf("%d%s", pid, ext)
+		imagePath := filepath.Join(ImageDir, filename)
+		if err := os.WriteFile(imagePath, filedata, 0644); err != nil {
+			log.Printf("Failed to save image file: %v", err)
+			// エラーが発生してもリクエストは続行
+		}
 	}
 
 	http.Redirect(w, r, "/posts/"+strconv.FormatInt(pid, 10), http.StatusFound)
