@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	crand "crypto/rand"
 	"fmt"
 	"html/template"
@@ -38,7 +37,7 @@ var (
 const (
 	postsPerPage  = 20
 	ISO8601Format = "2006-01-02T15:04:05-07:00"
-	UploadLimit   = 10 * 1024 * 1024                  // 10mb
+	UploadLimit   = 10 * 1024 * 1024                        // 10mb
 	ImageDir      = "/home/isucon/private_isu/webapp/image" // isuconユーザー権限で書き込み可能なディレクトリ
 )
 
@@ -111,7 +110,7 @@ func extractImagesToFiles() error {
 	if err := os.RemoveAll(ImageDir); err != nil {
 		log.Printf("Failed to remove image directory: %v", err)
 	}
-	
+
 	// 画像ディレクトリを作成
 	if err := os.MkdirAll(ImageDir, 0755); err != nil {
 		return fmt.Errorf("failed to create image directory: %w", err)
@@ -170,86 +169,13 @@ func extractImagesToFiles() error {
 	return nil
 }
 
-// コンテキスト対応版の画像抽出
-func extractImagesToFilesWithContext(ctx context.Context) error {
-	// 既存の画像ディレクトリを削除
-	if err := os.RemoveAll(ImageDir); err != nil {
-		log.Printf("Failed to remove image directory: %v", err)
-	}
-	
-	// 画像ディレクトリを作成
-	if err := os.MkdirAll(ImageDir, 0755); err != nil {
-		return fmt.Errorf("failed to create image directory: %w", err)
-	}
-
-	// 全画像を取得
-	rows, err := db.QueryContext(ctx, "SELECT id, mime, imgdata FROM posts WHERE imgdata IS NOT NULL")
-	if err != nil {
-		return fmt.Errorf("failed to query images: %w", err)
-	}
-	defer rows.Close()
-
-	var count int
-	for rows.Next() {
-		// コンテキストがキャンセルされたかチェック
-		select {
-		case <-ctx.Done():
-			log.Printf("Image extraction cancelled after %d images", count)
-			return ctx.Err()
-		default:
-		}
-		
-		var id int
-		var mime string
-		var imgdata []byte
-		
-		if err := rows.Scan(&id, &mime, &imgdata); err != nil {
-			log.Printf("Failed to scan image row: %v", err)
-			continue
-		}
-		
-		// 拡張子を決定
-		ext := ""
-		switch mime {
-		case "image/jpeg":
-			ext = ".jpg"
-		case "image/png":
-			ext = ".png"
-		case "image/gif":
-			ext = ".gif"
-		default:
-			log.Printf("Unknown mime type for post %d: %s", id, mime)
-			continue
-		}
-		
-		// ファイルパスを生成
-		filename := fmt.Sprintf("%d%s", id, ext)
-		filepath := filepath.Join(ImageDir, filename)
-		
-		// ファイルに書き込み
-		if err := os.WriteFile(filepath, imgdata, 0644); err != nil {
-			log.Printf("Failed to write image file %s: %v", filepath, err)
-			continue
-		}
-		
-		count++
-	}
-	
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("error iterating images: %w", err)
-	}
-	
-	log.Printf("Extracted %d images to %s", count, ImageDir)
-	return nil
-}
-
 // 画像をオンデマンドで保存
 func saveImageToFile(id int, mime string, imgdata []byte) error {
 	// 画像ディレクトリが存在しない場合は作成
 	if err := os.MkdirAll(ImageDir, 0755); err != nil {
 		return fmt.Errorf("failed to create image directory: %w", err)
 	}
-	
+
 	// 拡張子を決定
 	ext := ""
 	switch mime {
@@ -262,16 +188,16 @@ func saveImageToFile(id int, mime string, imgdata []byte) error {
 	default:
 		return fmt.Errorf("unknown mime type: %s", mime)
 	}
-	
+
 	// ファイルパスを生成
 	filename := fmt.Sprintf("%d%s", id, ext)
 	imagePath := filepath.Join(ImageDir, filename)
-	
+
 	// ファイルに書き込み
 	if err := os.WriteFile(imagePath, imgdata, 0644); err != nil {
 		return fmt.Errorf("failed to write image file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -508,39 +434,27 @@ func getTemplPath(filename string) string {
 func getInitialize(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	dbInitialize()
-	
+
 	// 画像抽出の完了を待つチャンネル
 	done := make(chan bool)
-	
+
 	// 画像の抽出を非同期で実行（タイムアウト付き）
 	go func() {
-		// DB処理にかかった時間を考慮して、残り時間を計算
-		elapsed := time.Since(startTime)
-		remainingTime := 8*time.Second - elapsed
-		
-		ctx, cancel := context.WithTimeout(context.Background(), remainingTime)
-		defer cancel()
-		
-		if err := extractImagesToFilesWithContext(ctx); err != nil {
+
+		if err := extractImagesToFiles(); err != nil {
 			log.Printf("Failed to extract all images: %v", err)
 		}
 		close(done)
 	}()
-	
+
 	go func() {
 		if _, err := http.Get("http://13.230.253.21:9000/api/group/collect"); err != nil {
 			slog.Error("failed to communicate with pprotein", "error", err)
 		}
 	}()
-	
-	// 画像抽出が完了するか、合計8秒経過するまで待つ
-	select {
-	case <-done:
-		log.Printf("Initialize completed in %v", time.Since(startTime))
-	case <-time.After(8*time.Second - time.Since(startTime)):
-		log.Printf("Initialize timeout after %v", time.Since(startTime))
-	}
-	
+
+	time.Sleep(9*time.Second - time.Since(startTime))
+
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -1017,7 +931,7 @@ func getImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ext := r.PathValue("ext")
-	
+
 	// 拡張子からMIMEタイプを決定
 	var expectedMime string
 	switch ext {
@@ -1031,7 +945,7 @@ func getImage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	
+
 	// nginxのtry_filesでファイルが無い場合のみここに来るので、DBから取得
 	post := Post{}
 	err = db.Get(&post, "SELECT * FROM `posts` WHERE `id` = ?", pid)
@@ -1046,14 +960,14 @@ func getImage(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
-	
+
 	// 画像をファイルに保存（非同期）
 	go func() {
 		if err := saveImageToFile(pid, post.Mime, post.Imgdata); err != nil {
 			log.Printf("Failed to save image %d: %v", pid, err)
 		}
 	}()
-	
+
 	// レスポンスを返す
 	w.Header().Set("Content-Type", post.Mime)
 	_, err = w.Write(post.Imgdata)
