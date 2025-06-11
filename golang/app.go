@@ -567,11 +567,10 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
 		WHERE p.created_at <= ? 
-			AND p.del_flg = 0 
 			AND u.del_flg = 0
 		ORDER BY p.created_at DESC
 		LIMIT %d`, postsPerPage)
-	
+
 	err = db.Select(&results, query, t.Format(ISO8601Format))
 	if err != nil {
 		log.Print(err)
