@@ -178,7 +178,7 @@ func getFlash(w http.ResponseWriter, r *http.Request, key string) string {
 
 func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, error) {
 	results = lo.Filter(results, func(p Post, _ int) bool {
-		return p.User.DelFlg == 0
+		return p.User.ID != 0 && p.User.DelFlg == 0
 	})
 	if len(results) > postsPerPage {
 		results = results[:postsPerPage]
