@@ -444,13 +444,12 @@ func getInitialize(w http.ResponseWriter, r *http.Request) {
 		close(done)
 	}()
 
+	time.Sleep(9*time.Second - time.Since(startTime))
 	go func() {
 		if _, err := http.Get("http://13.230.253.21:9000/api/group/collect"); err != nil {
 			slog.Error("failed to communicate with pprotein", "error", err)
 		}
 	}()
-
-	time.Sleep(9*time.Second - time.Since(startTime))
 
 	w.WriteHeader(http.StatusOK)
 }
