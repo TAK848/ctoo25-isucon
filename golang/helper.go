@@ -24,10 +24,10 @@ func dbInitialize() {
 		db.Exec(sql)
 	}
 
-	// 既存の画像をファイルシステムに書き出す
-	if err := extractImagesToFiles(); err != nil {
-		log.Printf("Failed to extract images: %v", err)
-	}
+	// // 既存の画像をファイルシステムに書き出す
+	// if err := extractImagesToFiles(); err != nil {
+	// 	log.Printf("Failed to extract images: %v", err)
+	// }
 }
 
 // 画像をファイルシステムに書き出す
