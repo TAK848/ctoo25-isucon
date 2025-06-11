@@ -689,7 +689,24 @@ func getPostsID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	results := []Post{}
-	err = db.Select(&results, "SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` WHERE `id` = ?", pid)
+	query := `
+		SELECT 
+			p.id AS id,
+			p.user_id AS user_id,
+			p.body AS body,
+			p.mime AS mime,
+			p.created_at AS created_at,
+			u.id AS "user.id",
+			u.account_name AS "user.account_name",
+			u.passhash AS "user.passhash",
+			u.authority AS "user.authority",
+			u.del_flg AS "user.del_flg",
+			u.created_at AS "user.created_at"
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		WHERE p.id = ? AND u.del_flg = 0`
+	
+	err = db.Select(&results, query, pid)
 	if err != nil {
 		log.Print(err)
 		return
