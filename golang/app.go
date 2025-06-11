@@ -82,6 +82,21 @@ func init() {
 	}
 	memcacheClient = memcache.New(memdAddr)
 	memcacheClient.Timeout = 100 * time.Millisecond // Set shorter timeout
+	
+	// Test memcached connection
+	testKey := "test_connection"
+	err := memcacheClient.Set(&memcache.Item{
+		Key:        testKey,
+		Value:      []byte("test"),
+		Expiration: 1,
+	})
+	if err != nil {
+		log.Fatalf("Failed to connect to memcached at %s: %v", memdAddr, err)
+	}
+	
+	// Clean up test key
+	memcacheClient.Delete(testKey)
+	
 	store = gsm.NewMemcacheStore(memcacheClient, "iscogram_", []byte("sendagaya"))
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
