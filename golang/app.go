@@ -24,7 +24,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
-	"github.com/samber/lo"
+	_ "github.com/samber/lo"
 )
 
 var (
