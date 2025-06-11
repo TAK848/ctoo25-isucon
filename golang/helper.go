@@ -32,18 +32,31 @@ func dbInitialize() {
 
 // 画像をファイルシステムに書き出す
 func extractImagesToFiles() error {
-	// 既存の画像ディレクトリを削除
-	if err := os.RemoveAll(ImageDir); err != nil {
-		log.Printf("Failed to remove image directory: %v", err)
-	}
-
-	// 画像ディレクトリを作成
+	// 画像ディレクトリが存在しない場合は作成
 	if err := os.MkdirAll(ImageDir, 0755); err != nil {
 		return fmt.Errorf("failed to create image directory: %w", err)
 	}
 
-	// 全画像を取得
-	rows, err := db.Query("SELECT id, mime, imgdata FROM posts WHERE imgdata IS NOT NULL AND id <=10000")
+	// ID > 10000 の画像ファイルのみ削除
+	files, err := filepath.Glob(filepath.Join(ImageDir, "*"))
+	if err != nil {
+		log.Printf("Failed to list image files: %v", err)
+	} else {
+		for _, file := range files {
+			base := filepath.Base(file)
+			// ファイル名から拡張子を除いたIDを取得
+			var id int
+			if _, err := fmt.Sscanf(base, "%d.", &id); err == nil && id > 10000 {
+				if err := os.Remove(file); err != nil {
+					log.Printf("Failed to remove image file %s: %v", file, err)
+				}
+			}
+		}
+	}
+	return nil
+
+	// ID <= 10000 の新規画像を取得して保存
+	rows, err := db.Query("SELECT id, mime, imgdata FROM posts WHERE imgdata IS NOT NULL AND id <= 10000")
 	if err != nil {
 		return fmt.Errorf("failed to query images: %w", err)
 	}
