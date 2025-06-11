@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/bradfitz/gomemcache/memcache"
 	gsm "github.com/bradleypeabody/gorilla-sessions-memcache"
+	"github.com/catatsuy/private-isu/webapp/golang/chiinteg"
 	"github.com/go-chi/chi/v5"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/sessions"
@@ -262,6 +264,11 @@ func getTemplPath(filename string) string {
 
 func getInitialize(w http.ResponseWriter, r *http.Request) {
 	dbInitialize()
+	go func() {
+		if _, err := http.Get("http://localhost:9000/api/group/collect"); err != nil {
+			slog.Error("failed to communicate with pprotein", "error", err)
+		}
+	}()
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -830,6 +837,7 @@ func main() {
 	defer db.Close()
 
 	r := chi.NewRouter()
+	chiinteg.Integrate(r)
 
 	r.Get("/initialize", getInitialize)
 	r.Get("/login", getLogin)
