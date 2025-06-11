@@ -265,7 +265,7 @@ func getTemplPath(filename string) string {
 func getInitialize(w http.ResponseWriter, r *http.Request) {
 	dbInitialize()
 	go func() {
-		if _, err := http.Get("http://localhost:9000/api/group/collect"); err != nil {
+		if _, err := http.Get("http://13.230.253.21:9000/api/group/collect"); err != nil {
 			slog.Error("failed to communicate with pprotein", "error", err)
 		}
 	}()
