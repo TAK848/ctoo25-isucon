@@ -208,9 +208,12 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 
 		p.Comments = comments
 
-		err = db.Get(&p.User, "SELECT * FROM `users` WHERE `id` = ?", p.UserID)
-		if err != nil {
-			return nil, err
+		// If User is already populated (from JOIN), skip the query
+		if p.User.ID == 0 {
+			err = db.Get(&p.User, "SELECT * FROM `users` WHERE `id` = ?", p.UserID)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		p.CSRFToken = csrfToken
@@ -395,7 +398,26 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 
 	results := []Post{}
 
-	err := db.Select(&results, fmt.Sprintf("SELECT `id`, `user_id`, `body`, `mime`, `created_at` FROM `posts` ORDER BY `created_at` DESC LIMIT %d", postsPerPage))
+	query := fmt.Sprintf(`
+		SELECT 
+			p.id AS id,
+			p.user_id AS user_id,
+			p.body AS body,
+			p.mime AS mime,
+			p.created_at AS created_at,
+			u.id AS "user.id",
+			u.account_name AS "user.account_name",
+			u.passhash AS "user.passhash",
+			u.authority AS "user.authority",
+			u.del_flg AS "user.del_flg",
+			u.created_at AS "user.created_at"
+		FROM posts p
+		JOIN users u ON p.user_id = u.id
+		WHERE u.del_flg = 0
+		ORDER BY p.created_at DESC
+		LIMIT %d`, postsPerPage)
+
+	err := db.Select(&results, query)
 	if err != nil {
 		log.Print(err)
 		return
