@@ -9,7 +9,6 @@ import (
 	"html/template"
 	"io"
 	"log"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -457,24 +456,24 @@ func getInitialize(w http.ResponseWriter, r *http.Request) {
 
 	dbInitialize()
 
-	// // 画像抽出の完了を待つチャンネル
-	// done := make(chan bool)
+	// 画像抽出の完了を待つチャンネル
+	done := make(chan bool)
 
-	// // 画像の抽出を非同期で実行（タイムアウト付き）
-	// go func() {
+	// 画像の抽出を非同期で実行（タイムアウト付き）
+	go func() {
 
-	// 	if err := extractImagesToFiles(); err != nil {
-	// 		log.Printf("Failed to extract all images: %v", err)
-	// 	}
-	// 	close(done)
-	// }()
+		if err := extractImagesToFiles(); err != nil {
+			log.Printf("Failed to extract all images: %v", err)
+		}
+		close(done)
+	}()
 
 	time.Sleep(9*time.Second - time.Since(startTime))
-	go func() {
-		if _, err := http.Get("http://13.230.253.21:9000/api/group/collect"); err != nil {
-			slog.Error("failed to communicate with pprotein", "error", err)
-		}
-	}()
+	// go func() {
+	// 	if _, err := http.Get("http://13.230.253.21:9000/api/group/collect"); err != nil {
+	// 		slog.Error("failed to communicate with pprotein", "error", err)
+	// 	}
+	// }()
 
 	w.WriteHeader(http.StatusOK)
 }
