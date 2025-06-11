@@ -412,7 +412,7 @@ func getIndex(w http.ResponseWriter, r *http.Request) {
 			u.del_flg AS "user.del_flg",
 			u.created_at AS "user.created_at"
 		FROM posts p
-		JOIN users u ON p.user_id = u.id
+		INNER JOIN users u ON p.user_id = u.id
 		WHERE u.del_flg = 0
 		ORDER BY p.created_at DESC
 		LIMIT %d`, postsPerPage)
@@ -565,7 +565,7 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 			u.del_flg AS "user.del_flg",
 			u.created_at AS "user.created_at"
 		FROM posts p
-		JOIN users u ON p.user_id = u.id
+		INNER JOIN users u ON p.user_id = u.id
 		WHERE p.created_at <= ? 
 			AND u.del_flg = 0
 		ORDER BY p.created_at DESC
