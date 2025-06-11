@@ -177,12 +177,12 @@ func getFlash(w http.ResponseWriter, r *http.Request, key string) string {
 }
 
 func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, error) {
-	// results = lo.Filter(results, func(p Post, _ int) bool {
-	// 	return p.User.ID == 0 || (p.User.ID != 0 && p.User.DelFlg == 0)
-	// })
-	// if len(results) > postsPerPage {
-	// 	results = results[:postsPerPage]
-	// }
+	results = lo.Filter(results, func(p Post, _ int) bool {
+		return p.User.ID == 0 || (p.User.ID != 0 && p.User.DelFlg == 0)
+	})
+	if len(results) > postsPerPage {
+		results = results[:postsPerPage]
+	}
 
 	if len(results) == 0 {
 		return []Post{}, nil
@@ -879,7 +879,7 @@ func main() {
 
 	dsn := fmt.Sprintf(
 		// admin prepare
-		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=Local&maxOpenConns=1000&maxIdleConns=1000&interpolateParams=true",
+		"%s:%s@tcp(%s:%s)/%s?charset=utf8mb4&parseTime=true&loc=Local&interpolateParams=true",
 		user,
 		password,
 		host,
