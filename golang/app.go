@@ -21,6 +21,7 @@ import (
 
 	"github.com/bradfitz/gomemcache/memcache"
 	gsm "github.com/bradleypeabody/gorilla-sessions-memcache"
+	"github.com/catatsuy/cache"
 	"github.com/catatsuy/private-isu/webapp/golang/chiinteg"
 	"github.com/go-chi/chi/v5"
 	_ "github.com/go-sql-driver/mysql"
@@ -31,8 +32,9 @@ import (
 )
 
 var (
-	db    *sqlx.DB
-	store *gsm.MemcacheStore
+	db        *sqlx.DB
+	store     *gsm.MemcacheStore
+	userCache *cache.ReadHeavyCache[int, User]
 )
 
 const (
@@ -81,6 +83,9 @@ func init() {
 	memcacheClient := memcache.New(memdAddr)
 	store = gsm.NewMemcacheStore(memcacheClient, "iscogram_", []byte("sendagaya"))
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	// Initialize user cache
+	userCache = cache.NewReadHeavyCache[int, User]()
 }
 
 // 画像をオンデマンドで保存
@@ -161,12 +166,22 @@ func getSessionUser(r *http.Request) User {
 		return User{}
 	}
 
-	u := User{}
+	userID := uid.(int)
 
-	err := db.Get(&u, "SELECT * FROM `users` WHERE `id` = ?", uid)
+	// Check cache first
+	if cachedUser, ok := userCache.Get(userID); ok {
+		return cachedUser
+	}
+
+	// Not in cache, fetch from DB
+	u := User{}
+	err := db.Get(&u, "SELECT * FROM `users` WHERE `id` = ?", userID)
 	if err != nil {
 		return User{}
 	}
+
+	// Cache the user
+	userCache.Set(userID, u)
 
 	return u
 }
@@ -335,6 +350,10 @@ func getTemplPath(filename string) string {
 
 func getInitialize(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
+
+	// Clear user cache
+	userCache.Clear()
+
 	dbInitialize()
 
 	// 画像抽出の完了を待つチャンネル
@@ -389,6 +408,9 @@ func postLogin(w http.ResponseWriter, r *http.Request) {
 		session.Values["user_id"] = u.ID
 		session.Values["csrf_token"] = secureRandomStr(16)
 		session.Save(r, w)
+
+		// Cache the user
+		userCache.Set(u.ID, *u)
 
 		http.Redirect(w, r, "/", http.StatusFound)
 	} else {
@@ -459,9 +481,16 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		return
 	}
+
 	session.Values["user_id"] = uid
 	session.Values["csrf_token"] = secureRandomStr(16)
 	session.Save(r, w)
+
+	// Get and cache the newly created user
+	newUser := User{}
+	if err := db.Get(&newUser, "SELECT * FROM `users` WHERE `id` = ?", uid); err == nil {
+		userCache.Set(int(uid), newUser)
+	}
 
 	http.Redirect(w, r, "/", http.StatusFound)
 }
@@ -705,7 +734,7 @@ func getPostsID(w http.ResponseWriter, r *http.Request) {
 		FROM posts p
 		JOIN users u ON p.user_id = u.id
 		WHERE p.id = ? AND u.del_flg = 0`
-	
+
 	err = db.Select(&results, query, pid)
 	if err != nil {
 		log.Print(err)
@@ -998,6 +1027,11 @@ func postAdminBanned(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				log.Print(err)
 				return
+			}
+
+			// Clear cache for banned users
+			for _, uid := range userIDs {
+				userCache.Delete(uid)
 			}
 		}
 	}
