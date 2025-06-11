@@ -81,6 +81,7 @@ func init() {
 		memdAddr = "localhost:11211"
 	}
 	memcacheClient = memcache.New(memdAddr)
+	memcacheClient.Timeout = 100 * time.Millisecond // Set shorter timeout
 	store = gsm.NewMemcacheStore(memcacheClient, "iscogram_", []byte("sendagaya"))
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
@@ -369,7 +370,9 @@ func getInitialize(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 
 	// Clear all memcached data
-	memcacheClient.FlushAll()
+	if err := memcacheClient.FlushAll(); err != nil {
+		log.Printf("Failed to flush memcached: %v", err)
+	}
 
 	dbInitialize()
 
@@ -385,7 +388,7 @@ func getInitialize(w http.ResponseWriter, r *http.Request) {
 		close(done)
 	}()
 
-	time.Sleep(9*time.Second - time.Since(startTime))
+	time.Sleep(5*time.Second - time.Since(startTime))
 	go func() {
 		if _, err := http.Get("http://13.230.253.21:9000/api/group/collect"); err != nil {
 			slog.Error("failed to communicate with pprotein", "error", err)
@@ -506,7 +509,7 @@ func postRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session.Values["user_id"] = int(uid)  // Convert to int for consistency
+	session.Values["user_id"] = int(uid) // Convert to int for consistency
 	session.Values["csrf_token"] = secureRandomStr(16)
 	session.Save(r, w)
 
