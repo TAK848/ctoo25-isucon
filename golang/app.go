@@ -37,8 +37,8 @@ var (
 const (
 	postsPerPage  = 20
 	ISO8601Format = "2006-01-02T15:04:05-07:00"
-	UploadLimit   = 10 * 1024 * 1024 // 10mb
-	ImageDir      = "/var/www/images"   // nginx配信用の画像ディレクトリ
+	UploadLimit   = 10 * 1024 * 1024                  // 10mb
+	ImageDir      = "/home/isucon/private_isu/webapp/image" // isuconユーザー権限で書き込み可能なディレクトリ
 )
 
 type User struct {
@@ -97,7 +97,7 @@ func dbInitialize() {
 	for _, sql := range sqls {
 		db.Exec(sql)
 	}
-	
+
 	// 既存の画像をファイルシステムに書き出す
 	if err := extractImagesToFiles(); err != nil {
 		log.Printf("Failed to extract images: %v", err)
@@ -123,12 +123,12 @@ func extractImagesToFiles() error {
 		var id int
 		var mime string
 		var imgdata []byte
-		
+
 		if err := rows.Scan(&id, &mime, &imgdata); err != nil {
 			log.Printf("Failed to scan image row: %v", err)
 			continue
 		}
-		
+
 		// 拡張子を決定
 		ext := ""
 		switch mime {
@@ -142,24 +142,24 @@ func extractImagesToFiles() error {
 			log.Printf("Unknown mime type for post %d: %s", id, mime)
 			continue
 		}
-		
+
 		// ファイルパスを生成
 		filename := fmt.Sprintf("%d%s", id, ext)
 		filepath := filepath.Join(ImageDir, filename)
-		
+
 		// ファイルに書き込み
 		if err := os.WriteFile(filepath, imgdata, 0644); err != nil {
 			log.Printf("Failed to write image file %s: %v", filepath, err)
 			continue
 		}
-		
+
 		count++
 	}
-	
+
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("error iterating images: %w", err)
 	}
-	
+
 	log.Printf("Extracted %d images to %s", count, ImageDir)
 	return nil
 }
@@ -855,7 +855,7 @@ func postIndex(w http.ResponseWriter, r *http.Request) {
 	case "image/gif":
 		ext = ".gif"
 	}
-	
+
 	if ext != "" {
 		filename := fmt.Sprintf("%d%s", pid, ext)
 		imagePath := filepath.Join(ImageDir, filename)

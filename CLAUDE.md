@@ -21,6 +21,7 @@ docker-compose up -d
 # Change line 18: context: ruby/ → context: golang/
 
 # NOTE: Docker設定（docker-compose.yml等）は本番環境と異なるため触らないでください
+# NOTE: 本番はEC2で /home/isucon/private_isu/webapp/golang で動作、systemdでisuconユーザー権限で実行
 ```
 
 ### Database Operations
