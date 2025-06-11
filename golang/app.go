@@ -1150,6 +1150,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to DB: %s.", err.Error())
 	}
+
+	db.SetMaxOpenConns(64)
+	db.SetMaxIdleConns(64)
 	defer db.Close()
 
 	// Initialize templates after DB connection is established
