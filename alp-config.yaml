@@ -1,0 +1,21 @@
+matching_groups:
+  # API mock patterns
+  - ^/api/mock/.+[0-9]$
+  - ^/api/mock/.+[a-z]$
+  
+  # Image patterns with ID
+  - ^/image/[0-9]+\.jpg$
+  - ^/image/[0-9]+\.png$
+  - ^/image/[0-9]+\.gif$
+  
+  # Static CSS files
+  - ^/css/.+\.css$
+  
+  # Static JS files
+  - ^/js/.+\.js$
+  
+  # User profile pages
+  - ^/@[a-zA-Z]+$
+  
+  # Post pages with ID
+  - ^/posts/[0-9]+$
