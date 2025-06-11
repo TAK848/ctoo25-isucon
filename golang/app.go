@@ -25,6 +25,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/jmoiron/sqlx"
 	"github.com/samber/lo"
+	"github.com/samber/lo/mutable"
 )
 
 var (
@@ -176,7 +177,7 @@ func getFlash(w http.ResponseWriter, r *http.Request, key string) string {
 	}
 }
 
-func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, error) {
+func makePosts(results []Post, csrfToken string, fetchAllComments bool) ([]Post, error) {
 	results = lo.Filter(results, func(p Post, _ int) bool {
 		return p.User.ID == 0 || (p.User.ID != 0 && p.User.DelFlg == 0)
 	})
@@ -188,37 +189,89 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 		return []Post{}, nil
 	}
 
-	var posts []Post
+	// Extract post IDs
+	postIDs := lo.Map(results, func(p Post, _ int) int {
+		return p.ID
+	})
 
+	// Batch fetch comment counts
+	type CommentCount struct {
+		PostID int `db:"post_id"`
+		Count  int `db:"count"`
+	}
+	var commentCounts []CommentCount
+	query, args, err := sqlx.In(`
+		SELECT post_id, COUNT(*) as count 
+		FROM comments 
+		WHERE post_id IN (?)
+		GROUP BY post_id`, postIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.Select(&commentCounts, query, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create map for quick lookup
+	countMap := lo.KeyBy(commentCounts, func(cc CommentCount) int {
+		return cc.PostID
+	})
+
+	// Batch fetch comments with user info
+	commentQuery, commentArgs, err := sqlx.In(`
+		SELECT 
+			c.id as id,
+			c.post_id as post_id,
+			c.user_id as user_id,
+			c.comment as comment,
+			c.created_at as created_at,
+			u.id as "user.id",
+			u.account_name as "user.account_name",
+			u.passhash as "user.passhash",
+			u.authority as "user.authority",
+			u.del_flg as "user.del_flg",
+			u.created_at as "user.created_at"
+		FROM comments c
+		JOIN users u ON c.user_id = u.id
+		WHERE c.post_id IN (?)
+		ORDER BY c.post_id, c.created_at DESC`, postIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	var commentsFromDB []Comment
+	err = db.Select(&commentsFromDB, commentQuery, commentArgs...)
+	if err != nil {
+		return nil, err
+	}
+
+	// Group comments by post_id
+	commentsByPost := lo.GroupBy(commentsFromDB, func(c Comment) int {
+		return c.PostID
+	})
+
+	// Build final posts
+	posts := make([]Post, 0, len(results))
 	for _, p := range results {
-		err := db.Get(&p.CommentCount, "SELECT COUNT(*) AS `count` FROM `comments` WHERE `post_id` = ?", p.ID)
-		if err != nil {
-			return nil, err
+		// Set comment count
+		if cc, ok := countMap[p.ID]; ok {
+			p.CommentCount = cc.Count
 		}
 
-		query := "SELECT * FROM `comments` WHERE `post_id` = ? ORDER BY `created_at` DESC"
-		if !allComments {
-			query += " LIMIT 3"
-		}
-		var comments []Comment
-		err = db.Select(&comments, query, p.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		for i := 0; i < len(comments); i++ {
-			err := db.Get(&comments[i].User, "SELECT * FROM `users` WHERE `id` = ?", comments[i].UserID)
-			if err != nil {
-				return nil, err
+		// Get comments for this post
+		if comments, ok := commentsByPost[p.ID]; ok {
+			// Limit comments if needed
+			if !fetchAllComments && len(comments) > 3 {
+				comments = comments[:3]
 			}
-		}
 
-		// reverse
-		for i, j := 0, len(comments)-1; i < j; i, j = i+1, j-1 {
-			comments[i], comments[j] = comments[j], comments[i]
+			// Reverse comments to show oldest first
+			// lo.Reverse(comments)
+			mutable.Reverse(comments)
+			p.Comments = comments
 		}
-
-		p.Comments = comments
 
 		// If User is already populated (from JOIN), skip the query
 		if p.User.ID == 0 {
@@ -229,13 +282,7 @@ func makePosts(results []Post, csrfToken string, allComments bool) ([]Post, erro
 		}
 
 		p.CSRFToken = csrfToken
-
-		if p.User.DelFlg == 0 {
-			posts = append(posts, p)
-		}
-		if len(posts) >= postsPerPage {
-			break
-		}
+		posts = append(posts, p)
 	}
 
 	return posts, nil
