@@ -104,7 +104,7 @@ func init() {
 
 func initTemplates() {
 	templates = make(map[string]*template.Template)
-	
+
 	fmap := template.FuncMap{
 		"imageURL": func(p Post) string {
 			ext := ""
@@ -118,19 +118,19 @@ func initTemplates() {
 			return "/image/" + strconv.Itoa(p.ID) + ext
 		},
 	}
-	
+
 	// Login page
 	templates["login"] = template.Must(template.ParseFiles(
 		getTemplPath("layout.html"),
 		getTemplPath("login.html"),
 	))
-	
+
 	// Register page
 	templates["register"] = template.Must(template.ParseFiles(
 		getTemplPath("layout.html"),
 		getTemplPath("register.html"),
 	))
-	
+
 	// Index page
 	templates["index"] = template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
 		getTemplPath("layout.html"),
@@ -138,7 +138,7 @@ func initTemplates() {
 		getTemplPath("posts.html"),
 		getTemplPath("post.html"),
 	))
-	
+
 	// User page
 	templates["user"] = template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
 		getTemplPath("layout.html"),
@@ -146,20 +146,20 @@ func initTemplates() {
 		getTemplPath("posts.html"),
 		getTemplPath("post.html"),
 	))
-	
+
 	// Posts partial
 	templates["posts"] = template.Must(template.New("posts.html").Funcs(fmap).ParseFiles(
 		getTemplPath("posts.html"),
 		getTemplPath("post.html"),
 	))
-	
+
 	// Post detail page
 	templates["post_id"] = template.Must(template.New("layout.html").Funcs(fmap).ParseFiles(
 		getTemplPath("layout.html"),
 		getTemplPath("post_id.html"),
 		getTemplPath("post.html"),
 	))
-	
+
 	// Admin banned page
 	templates["banned"] = template.Must(template.ParseFiles(
 		getTemplPath("layout.html"),
@@ -457,17 +457,17 @@ func getInitialize(w http.ResponseWriter, r *http.Request) {
 
 	dbInitialize()
 
-	// 画像抽出の完了を待つチャンネル
-	done := make(chan bool)
+	// // 画像抽出の完了を待つチャンネル
+	// done := make(chan bool)
 
-	// 画像の抽出を非同期で実行（タイムアウト付き）
-	go func() {
+	// // 画像の抽出を非同期で実行（タイムアウト付き）
+	// go func() {
 
-		if err := extractImagesToFiles(); err != nil {
-			log.Printf("Failed to extract all images: %v", err)
-		}
-		close(done)
-	}()
+	// 	if err := extractImagesToFiles(); err != nil {
+	// 		log.Printf("Failed to extract all images: %v", err)
+	// 	}
+	// 	close(done)
+	// }()
 
 	time.Sleep(9*time.Second - time.Since(startTime))
 	go func() {
