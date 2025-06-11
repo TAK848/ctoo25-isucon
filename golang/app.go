@@ -92,6 +92,7 @@ func dbInitialize() {
 		// EXPLAIN SELECT * FROM `comments` WHERE `post_id` = 1 ORDER BY `created_at` DESC LIMIT 100; 狙いのindex追加
 		// "CREATE INDEX IF NOT EXISTS `idx_post_id_created_at` ON `comments` (`post_id`, `created_at` DESC)",
 		// ALTER TABLE `posts` ADD INDEX `idx_posts_created_at` (`created_at` DESC);
+		// ALTER TABLE `comments` ADD INDEX `idx_comments_user_id` (`user_id` DESC);
 	}
 
 	for _, sql := range sqls {
