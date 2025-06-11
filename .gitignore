@@ -1,0 +1,8 @@
+node_modules/
+perl/
+php/
+# python/
+ruby/
+rust/
+node/
+nodejs/
